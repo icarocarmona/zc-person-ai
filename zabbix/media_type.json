@@ -1,0 +1,49 @@
+{
+  "zabbix_export": {
+    "version": "6.0",
+    "media_types": [
+      {
+        "name": "ZC Alert Agent",
+        "type": "WEBHOOK",
+        "parameters": [
+          {"name": "eventId",     "value": "{EVENT.ID}"},
+          {"name": "triggerId",   "value": "{TRIGGER.ID}"},
+          {"name": "triggerName", "value": "{TRIGGER.NAME}"},
+          {"name": "host",        "value": "{HOST.NAME}"},
+          {"name": "hostIp",      "value": "{HOST.IP}"},
+          {"name": "severity",    "value": "{EVENT.SEVERITY}"},
+          {"name": "description", "value": "{TRIGGER.DESCRIPTION}"},
+          {"name": "status",      "value": "{EVENT.STATUS}"},
+          {"name": "timestamp",   "value": "{EVENT.DATE} {EVENT.TIME}"},
+          {"name": "itemName",    "value": "{ITEM.NAME}"},
+          {"name": "itemValue",   "value": "{ITEM.VALUE}"},
+          {"name": "tags",        "value": "{EVENT.TAGS}"},
+          {"name": "url",         "value": "{$ZABBIX_URL}/tr_events.php?triggerid={TRIGGER.ID}&eventid={EVENT.ID}"}
+        ],
+        "script": "var params = JSON.parse(value);\nvar req = new HttpRequest();\nreq.addHeader('Content-Type: application/json');\nvar webhookUrl = params.webhookUrl || '{$ZABBIX_ALERT_WEBHOOK_URL}';\nvar body = JSON.stringify({\n  triggerId:   params.triggerId,\n  triggerName: params.triggerName,\n  host:        params.host,\n  hostIp:      params.hostIp,\n  severity:    params.severity,\n  description: params.description,\n  eventId:     params.eventId,\n  status:      params.status,\n  timestamp:   params.timestamp,\n  itemName:    params.itemName,\n  itemValue:   params.itemValue,\n  tags:        params.tags,\n  url:         params.url\n});\nvar response = req.post(webhookUrl, body);\nif (req.getStatus() !== 200) {\n  throw 'Request failed with HTTP status ' + req.getStatus() + ': ' + response;\n}\nreturn response;",
+        "process_tags": "YES",
+        "show_event_menu": "YES",
+        "message_templates": [
+          {
+            "event_source": "TRIGGERS",
+            "operation_mode": "PROBLEM",
+            "subject": "Problem: {EVENT.NAME}",
+            "message": "Problem started at {EVENT.TIME} on {EVENT.DATE}\nHost: {HOST.NAME}\nSeverity: {EVENT.SEVERITY}\nEvent ID: {EVENT.ID}"
+          },
+          {
+            "event_source": "TRIGGERS",
+            "operation_mode": "RECOVERY",
+            "subject": "Resolved: {EVENT.NAME}",
+            "message": "Resolved in {EVENT.DURATION} at {EVENT.RECOVERY.TIME} on {EVENT.RECOVERY.DATE}\nHost: {HOST.NAME}"
+          },
+          {
+            "event_source": "TRIGGERS",
+            "operation_mode": "UPDATE",
+            "subject": "Updated: {EVENT.NAME}",
+            "message": "Updated by {USER.FULLNAME}\nHost: {HOST.NAME}\nSeverity: {EVENT.SEVERITY}"
+          }
+        ]
+      }
+    ]
+  }
+}

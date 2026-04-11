@@ -1,0 +1,188 @@
+services:
+
+  # ---------------------------------------------------------------------------
+  # Redis — deduplicação de alertas
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7.2-alpine
+    container_name: zabbix-agent-redis
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - zabbix-agent-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Evolution API — gateway WhatsApp self-hosted
+  # ---------------------------------------------------------------------------
+  evolution-api:
+    image: atendai/evolution-api:v2.2.3
+    container_name: zabbix-agent-evolution
+    ports:
+      - "8080:8080"
+    environment:
+      SERVER_PORT: "8080"
+      SERVER_URL: "http://evolution-api:8080"
+      AUTHENTICATION_API_KEY: "${EVOLUTION_API_KEY}"
+      AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES: "true"
+      # Usa Redis para cache de sessão (sem banco externo)
+      DATABASE_ENABLED: "false"
+      CACHE_REDIS_ENABLED: "true"
+      CACHE_REDIS_URI: "redis://redis:6379/1"
+      CACHE_REDIS_PREFIX_KEY: "evolution"
+      CACHE_REDIS_SAVE_INSTANCES: "true"
+      CACHE_LOCAL_ENABLED: "false"
+      DEL_INSTANCE: "false"
+      LANGUAGE: "pt-BR"
+    volumes:
+      - evolution_instances:/evolution/instances
+      - evolution_store:/evolution/store
+    networks:
+      - zabbix-agent-net
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Agent — FastAPI app
+  # ---------------------------------------------------------------------------
+  agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: zabbix-agent-app
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      # Sobrescreve URLs para nomes de serviço dentro da rede Docker
+      REDIS_URL: "redis://redis:6379/0"
+      EVOLUTION_BASE_URL: "http://evolution-api:8080"
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - zabbix-agent-net
+    depends_on:
+      redis:
+        condition: service_healthy
+      evolution-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+
+  # ===========================================================================
+  # PROFILE: zabbix — sobe apenas com: docker compose --profile zabbix up -d
+  # Usado para testes locais. NÃO sobe em produção.
+  # ===========================================================================
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: zabbix-postgres
+    profiles: [zabbix]
+    environment:
+      POSTGRES_DB: "${POSTGRES_DB:-zabbix}"
+      POSTGRES_USER: "${POSTGRES_USER:-zabbix}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-zabbix_secret}"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - zabbix-agent-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-zabbix} -d ${POSTGRES_DB:-zabbix}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  zabbix-server:
+    image: zabbix/zabbix-server-pgsql:alpine-7.0-latest
+    container_name: zabbix-server
+    profiles: [zabbix]
+    ports:
+      - "10051:10051"
+    environment:
+      DB_SERVER_HOST: "postgres"
+      POSTGRES_DB: "${POSTGRES_DB:-zabbix}"
+      POSTGRES_USER: "${POSTGRES_USER:-zabbix}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-zabbix_secret}"
+      ZBX_STARTPOLLERS: "5"
+    networks:
+      - zabbix-agent-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "zabbix_server -R diaginfo 2>/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
+
+  zabbix-web:
+    image: zabbix/zabbix-web-nginx-pgsql:alpine-7.0-latest
+    container_name: zabbix-web
+    profiles: [zabbix]
+    ports:
+      - "8090:8080"
+    environment:
+      ZBX_SERVER_HOST: "zabbix-server"
+      DB_SERVER_HOST: "postgres"
+      POSTGRES_DB: "${POSTGRES_DB:-zabbix}"
+      POSTGRES_USER: "${POSTGRES_USER:-zabbix}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-zabbix_secret}"
+      PHP_TZ: "America/Sao_Paulo"
+    networks:
+      - zabbix-agent-net
+    depends_on:
+      zabbix-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/ping || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  zabbix-agent:
+    image: zabbix/zabbix-agent2:alpine-7.0-latest
+    container_name: zabbix-agent2
+    profiles: [zabbix]
+    environment:
+      ZBX_SERVER_HOST: "zabbix-server"
+      ZBX_HOSTNAME: "zabbix-docker-host"
+    networks:
+      - zabbix-agent-net
+    depends_on:
+      - zabbix-server
+    restart: unless-stopped
+
+volumes:
+  redis_data:
+  evolution_instances:
+  evolution_store:
+  postgres_data:
+
+networks:
+  zabbix-agent-net:
+    driver: bridge
