@@ -1,7 +1,24 @@
 import re
 from functools import lru_cache
+from typing import Any, Tuple, Type
+
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import (
+    BaseSettings,
+    JsonConfigSettingsSource,
+    PydanticBaseSettingsSource,
+    SettingsConfigDict,
+)
+
+
+class _SafeJsonConfigSource(JsonConfigSettingsSource):
+    """JsonConfigSettingsSource que não quebra se o arquivo ainda não existe."""
+
+    def __call__(self) -> dict[str, Any]:
+        try:
+            return super().__call__()
+        except Exception:
+            return {}
 
 
 class Settings(BaseSettings):
@@ -10,47 +27,72 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
+        # runtime_config.json é gerado pelo config_store a partir do banco.
+        # Tem prioridade acima do .env (ver settings_customise_sources).
+        json_file="runtime_config.json",
+        json_file_encoding="utf-8",
     )
 
-    # AI provider (OpenAI or OpenRouter-compatible)
-    ai_api_key: str = Field(..., description="API key for the AI provider")
+    # -------------------------------------------------------------------------
+    # AI provider (OpenAI ou OpenRouter-compatible)
+    # -------------------------------------------------------------------------
+    ai_api_key: str = Field(..., description="API key para o provedor de IA")
     ai_base_url: str = Field(
         default="https://api.openai.com/v1",
-        description="Base URL for AI provider. OpenRouter: https://openrouter.ai/api/v1",
+        description="Base URL do provedor. OpenRouter: https://openrouter.ai/api/v1",
     )
     ai_model: str = Field(
         default="gpt-4o",
-        description="Model name. OpenRouter example: openai/gpt-4o",
+        description="Modelo. OpenRouter: openai/gpt-4o ou anthropic/claude-sonnet-4-5",
     )
 
+    # -------------------------------------------------------------------------
     # Evolution API (WhatsApp gateway)
-    evolution_api_key: str = Field(..., description="Evolution API authentication key")
+    # -------------------------------------------------------------------------
+    evolution_api_key: str = Field(..., description="Chave de autenticação da Evolution API")
     evolution_instance_name: str = Field(
         default="zabbix-alerts",
-        description="WhatsApp instance name registered in Evolution API",
+        description="Nome da instância WhatsApp na Evolution API",
     )
     evolution_base_url: str = Field(
         default="http://evolution-api:8080",
-        description="Evolution API base URL (internal Docker network)",
+        description="URL base da Evolution API (rede interna Docker)",
     )
 
-    # WhatsApp destination
+    # -------------------------------------------------------------------------
+    # WhatsApp destino
+    # -------------------------------------------------------------------------
     whatsapp_destination_number: str = Field(
         ...,
-        description="Destination number with country code, e.g. 5511999999999",
+        description="Número de destino com DDI, ex: 5511999999999",
     )
 
+    # -------------------------------------------------------------------------
     # Redis
+    # -------------------------------------------------------------------------
     redis_url: str = Field(default="redis://redis:6379/0")
 
-    # App behaviour
+    # -------------------------------------------------------------------------
+    # Banco de configuração (bootstrap — sempre lido do env, nunca do banco)
+    # -------------------------------------------------------------------------
+    config_database_url: str = Field(
+        default="postgresql://agent:agent_secret@postgres-config/agent_config",
+        description="DSN do banco Postgres usado para persistir as configurações",
+    )
+
+    # -------------------------------------------------------------------------
+    # Comportamento do agente
+    # -------------------------------------------------------------------------
     log_level: str = Field(default="INFO")
     dedup_ttl_seconds: int = Field(default=1800, ge=60, le=86400)
     allowed_severities: list[str] = Field(
         default=["High", "Disaster"],
-        description="Comma-separated severities to process",
+        description="Severidades a processar (vírgula no .env, lista no JSON)",
     )
 
+    # -------------------------------------------------------------------------
+    # Validators
+    # -------------------------------------------------------------------------
     @field_validator("allowed_severities", mode="before")
     @classmethod
     def parse_severities(cls, v: object) -> list[str]:
@@ -63,12 +105,34 @@ class Settings(BaseSettings):
     def normalize_phone(cls, v: str) -> str:
         cleaned = re.sub(r"[^\d]", "", str(v))
         if len(cleaned) < 10:
-            raise ValueError("WhatsApp number too short — include country code, e.g. 5511999999999")
+            raise ValueError("Número muito curto — inclua o DDI, ex: 5511999999999")
         return cleaned
 
+    # -------------------------------------------------------------------------
+    # Computed
+    # -------------------------------------------------------------------------
     @property
     def evolution_send_text_url(self) -> str:
         return f"{self.evolution_base_url}/message/sendText/{self.evolution_instance_name}"
+
+    # -------------------------------------------------------------------------
+    # Source priority: env vars > runtime_config.json (banco) > .env
+    # -------------------------------------------------------------------------
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: Type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> Tuple[PydanticBaseSettingsSource, ...]:
+        return (
+            init_settings,
+            env_settings,                          # vars de ambiente (docker-compose overrides)
+            _SafeJsonConfigSource(settings_cls),   # runtime_config.json gerado pelo banco
+            dotenv_settings,                       # .env (fallback)
+        )
 
 
 @lru_cache(maxsize=1)
