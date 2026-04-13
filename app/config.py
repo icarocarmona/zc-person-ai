@@ -5,14 +5,42 @@ from typing import Any, Tuple, Type
 from pydantic import Field, field_validator
 from pydantic_settings import (
     BaseSettings,
+    DotEnvSettingsSource,
+    EnvSettingsSource,
     JsonConfigSettingsSource,
     PydanticBaseSettingsSource,
     SettingsConfigDict,
 )
 
 
+# ---------------------------------------------------------------------------
+# Campos do tipo list[str] que vêm do .env como CSV (ex: High,Disaster).
+# O EnvSettingsSource do Pydantic v2 tenta parsear como JSON e falha.
+# As subclasses abaixo convertem o CSV para lista antes de entregar ao Pydantic.
+# ---------------------------------------------------------------------------
+_CSV_FIELDS = {"allowed_severities"}
+
+
+class _CsvAwareEnvSource(EnvSettingsSource):
+    def prepare_field_value(
+        self, field_name: str, field: Any, value: Any, value_is_complex: bool
+    ) -> Any:
+        if field_name in _CSV_FIELDS and isinstance(value, str) and not value.strip().startswith("["):
+            return [s.strip() for s in value.split(",") if s.strip()]
+        return super().prepare_field_value(field_name, field, value, value_is_complex)
+
+
+class _CsvAwareDotEnvSource(DotEnvSettingsSource):
+    def prepare_field_value(
+        self, field_name: str, field: Any, value: Any, value_is_complex: bool
+    ) -> Any:
+        if field_name in _CSV_FIELDS and isinstance(value, str) and not value.strip().startswith("["):
+            return [s.strip() for s in value.split(",") if s.strip()]
+        return super().prepare_field_value(field_name, field, value, value_is_complex)
+
+
 class _SafeJsonConfigSource(JsonConfigSettingsSource):
-    """JsonConfigSettingsSource que não quebra se o arquivo ainda não existe."""
+    """Não quebra se runtime_config.json ainda não existe."""
 
     def __call__(self) -> dict[str, Any]:
         try:
@@ -129,9 +157,9 @@ class Settings(BaseSettings):
     ) -> Tuple[PydanticBaseSettingsSource, ...]:
         return (
             init_settings,
-            env_settings,                          # vars de ambiente (docker-compose overrides)
+            _CsvAwareEnvSource(settings_cls),      # env vars (docker-compose overrides)
             _SafeJsonConfigSource(settings_cls),   # runtime_config.json gerado pelo banco
-            dotenv_settings,                       # .env (fallback)
+            _CsvAwareDotEnvSource(settings_cls),   # .env (fallback)
         )
 
 

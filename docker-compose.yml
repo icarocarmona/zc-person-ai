@@ -40,6 +40,27 @@ services:
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------
+  # Postgres — banco dedicado para o Evolution API (sessões e instâncias)
+  # ---------------------------------------------------------------------------
+  postgres-evolution:
+    image: postgres:15-alpine
+    container_name: zabbix-agent-evolution-db
+    environment:
+      POSTGRES_DB: evolution_api
+      POSTGRES_USER: evolution
+      POSTGRES_PASSWORD: ${EVOLUTION_DB_PASSWORD:-evolution_secret}
+    volumes:
+      - evolution_db_data:/var/lib/postgresql/data
+    networks:
+      - zabbix-agent-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U evolution -d evolution_api"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
   # Evolution API — gateway WhatsApp self-hosted
   # ---------------------------------------------------------------------------
   evolution-api:
@@ -52,7 +73,10 @@ services:
       SERVER_URL: "http://evolution-api:8080"
       AUTHENTICATION_API_KEY: "${EVOLUTION_API_KEY}"
       AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES: "true"
-      DATABASE_ENABLED: "false"
+      DATABASE_ENABLED: "true"
+      DATABASE_PROVIDER: "postgresql"
+      DATABASE_CONNECTION_URI: "postgresql://evolution:${EVOLUTION_DB_PASSWORD:-evolution_secret}@postgres-evolution:5432/evolution_api"
+      DATABASE_CONNECTION_CLIENT_NAME: "evolution_exchange"
       CACHE_REDIS_ENABLED: "true"
       CACHE_REDIS_URI: "redis://redis:6379/1"
       CACHE_REDIS_PREFIX_KEY: "evolution"
@@ -67,6 +91,8 @@ services:
       - zabbix-agent-net
     depends_on:
       redis:
+        condition: service_healthy
+      postgres-evolution:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/ || exit 1"]
@@ -203,6 +229,7 @@ services:
 volumes:
   redis_data:
   config_db_data:
+  evolution_db_data:
   evolution_instances:
   evolution_store:
   postgres_data:
