@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
+import { GitBranch, MousePointer } from 'lucide-react'
 import {
   ReactFlow,
   Background,
@@ -10,7 +11,7 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useQuery } from '@tanstack/react-query'
-import { getConfig } from '../../api/client'
+import { getConfig, type Config } from '../../api/client'
 import { NodeInspector } from './NodeInspector'
 
 type PipelineNodeData = {
@@ -20,7 +21,7 @@ type PipelineNodeData = {
   nodeType: 'input' | 'process' | 'output'
 }
 
-/* ── Custom node ──────────────────────────────────────────── */
+/* ── Custom pipeline node ─────────────────────────────────── */
 function PipelineNode({ data, selected }: NodeProps) {
   const d = data as PipelineNodeData
   return (
@@ -48,6 +49,58 @@ function PipelineNode({ data, selected }: NodeProps) {
 }
 
 const nodeTypes = { pipeline: PipelineNode }
+
+/* ── Pipeline header bar ──────────────────────────────────── */
+function PipelineHeaderBar({ config }: { config: Config | undefined }) {
+  const channel = config?.notification_channel === 'telegram' ? 'Telegram' : 'WhatsApp'
+  const model = config?.ai_model ?? '—'
+  return (
+    <div className="pipeline-header">
+      <div className="pipeline-header-title">
+        <GitBranch size={12} />
+        Pipeline de Alertas
+      </div>
+      <div className="pipeline-stats">
+        <div className="pipeline-stat">
+          <span className="pipeline-stat-value">6</span>
+          <span>nós</span>
+        </div>
+        <div className="pipeline-stat">
+          <span className="pipeline-stat-value">5</span>
+          <span>conexões</span>
+        </div>
+        <div className="pipeline-stat">
+          <span className="pipeline-stat-value">{model}</span>
+        </div>
+        <div className="pipeline-stat">
+          <span className="pipeline-stat-value">{channel}</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ── Node inspector empty state ───────────────────────────── */
+function NodeInspectorEmpty() {
+  return (
+    <div className="node-inspector">
+      <div className="node-inspector-header">
+        <span className="node-inspector-title">Inspetor</span>
+      </div>
+      <div className="node-inspector-body">
+        <div className="node-inspector-empty">
+          <div className="node-inspector-empty-icon">
+            <MousePointer size={18} />
+          </div>
+          <div className="node-inspector-empty-title">Nenhum nó selecionado</div>
+          <div className="node-inspector-empty-sub">
+            Clique em um nó configurável para editar suas propriedades.
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 /* ── FlowTab ──────────────────────────────────────────────── */
 export function FlowTab() {
@@ -92,8 +145,7 @@ export function FlowTab() {
         position: { x: 840, y: 80 },
         data: {
           label: 'Notificação',
-          sub:
-            config?.notification_channel === 'telegram' ? 'Telegram' : 'WhatsApp',
+          sub: config?.notification_channel === 'telegram' ? 'Telegram' : 'WhatsApp',
           configKey: 'notif',
           nodeType: 'process',
         },
@@ -111,11 +163,11 @@ export function FlowTab() {
 
   const edges: Edge[] = useMemo(
     () => [
-      { id: 'e1', source: 'zabbix', target: 'severity', type: 'smoothstep', animated: true, style: { stroke: 'var(--primary)', strokeWidth: 2 } },
-      { id: 'e2', source: 'severity', target: 'dedup', type: 'smoothstep', animated: true, style: { stroke: 'var(--primary)', strokeWidth: 2 } },
-      { id: 'e3', source: 'dedup', target: 'ai', type: 'smoothstep', animated: true, style: { stroke: 'var(--primary)', strokeWidth: 2 } },
-      { id: 'e4', source: 'ai', target: 'notif', type: 'smoothstep', animated: true, style: { stroke: 'var(--primary)', strokeWidth: 2 } },
-      { id: 'e5', source: 'notif', target: 'output', type: 'smoothstep', animated: true, style: { stroke: 'var(--primary)', strokeWidth: 2 } },
+      { id: 'e1', source: 'zabbix',   target: 'severity', type: 'smoothstep', animated: true, style: { stroke: 'var(--primary)', strokeWidth: 2 } },
+      { id: 'e2', source: 'severity', target: 'dedup',    type: 'smoothstep', animated: true, style: { stroke: 'var(--primary)', strokeWidth: 2 } },
+      { id: 'e3', source: 'dedup',    target: 'ai',       type: 'smoothstep', animated: true, style: { stroke: 'var(--primary)', strokeWidth: 2 } },
+      { id: 'e4', source: 'ai',       target: 'notif',    type: 'smoothstep', animated: true, style: { stroke: 'var(--primary)', strokeWidth: 2 } },
+      { id: 'e5', source: 'notif',    target: 'output',   type: 'smoothstep', animated: true, style: { stroke: 'var(--primary)', strokeWidth: 2 } },
     ],
     []
   )
@@ -125,46 +177,57 @@ export function FlowTab() {
     if (d.configKey) setSelectedKey(d.configKey)
   }, [])
 
-  const isMobile = typeof window !== 'undefined' && window.innerWidth <= 640
+  const isMobile          = typeof window !== 'undefined' && window.innerWidth <= 640
+  const isTabletOrLarger  = typeof window !== 'undefined' && window.innerWidth > 768
 
   return (
-    <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 14 }}>
-      <div
-        style={{
-          flex: 1,
-          height: isMobile ? 240 : 320,
-          border: '1px solid var(--border)',
-          borderRadius: 'var(--radius)',
-          overflow: 'hidden',
-          background: 'var(--surface)',
-        }}
-      >
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          nodeTypes={nodeTypes}
-          onNodeClick={onNodeClick}
-          fitView
-          fitViewOptions={{ padding: 0.3 }}
-          nodesDraggable={false}
-          nodesConnectable={false}
-          panOnDrag={false}
-          zoomOnScroll={false}
-          zoomOnDoubleClick={false}
-          elementsSelectable
-          proOptions={{ hideAttribution: true }}
-        >
-          <Background color="var(--border)" gap={20} size={1} />
-        </ReactFlow>
-      </div>
+    <div>
+      <PipelineHeaderBar config={config} />
 
-      {selectedKey && config && (
-        <NodeInspector
-          configKey={selectedKey}
-          config={config}
-          onClose={() => setSelectedKey(null)}
-        />
-      )}
+      <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 14 }}>
+        {/* Scroll wrapper prevents canvas from being clipped on narrow screens */}
+        <div className="flow-scroll-wrapper" style={{ flex: 1, minWidth: 0 }}>
+          <div
+            className="flow-canvas-inner"
+            style={{
+              height: isMobile ? 240 : 320,
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius)',
+              overflow: 'hidden',
+              background: 'var(--surface)',
+            }}
+          >
+            <ReactFlow
+              nodes={nodes}
+              edges={edges}
+              nodeTypes={nodeTypes}
+              onNodeClick={onNodeClick}
+              fitView
+              fitViewOptions={{ padding: 0.25 }}
+              nodesDraggable={false}
+              nodesConnectable={false}
+              panOnDrag={false}
+              zoomOnScroll={false}
+              zoomOnDoubleClick={false}
+              elementsSelectable
+              proOptions={{ hideAttribution: true }}
+            >
+              <Background color="var(--border)" gap={20} size={1} />
+            </ReactFlow>
+          </div>
+        </div>
+
+        {/* Inspector panel: selected node or empty state */}
+        {selectedKey && config ? (
+          <NodeInspector
+            configKey={selectedKey}
+            config={config}
+            onClose={() => setSelectedKey(null)}
+          />
+        ) : (
+          isTabletOrLarger && <NodeInspectorEmpty />
+        )}
+      </div>
     </div>
   )
 }

@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useWizard, WizardProvider, STEPS, type WizardStep } from '../context/WizardContext'
-import { getConfig } from '../api/client'
+import { getConfig, type Config } from '../api/client'
 import { StepWelcome } from '../components/wizard/StepWelcome'
 import { StepAI } from '../components/wizard/StepAI'
 import { StepNotification } from '../components/wizard/StepNotification'
@@ -9,12 +9,50 @@ import { StepReview } from '../components/wizard/StepReview'
 import { StepDone } from '../components/wizard/StepDone'
 
 const PROGRESS_STEPS: { key: WizardStep; label: string }[] = [
-  { key: 'ai', label: 'Provedor IA' },
+  { key: 'ai',           label: 'Provedor IA' },
   { key: 'notification', label: 'Notificação' },
-  { key: 'filters', label: 'Filtros' },
-  { key: 'review', label: 'Revisão' },
+  { key: 'filters',      label: 'Filtros' },
+  { key: 'review',       label: 'Revisão' },
 ]
 
+/* ── Config status bar ────────────────────────────────────── */
+function ConfigStatusBar({ config }: { config: Config }) {
+  const hasAI    = !!(config.ai_api_key && config.ai_model)
+  const hasNotif = !!(config.notification_channel)
+
+  const notifLabel = config.notification_channel === 'telegram'
+    ? 'Telegram'
+    : 'WhatsApp'
+
+  const severitiesLabel = Array.isArray(config.allowed_severities) && config.allowed_severities.length
+    ? config.allowed_severities.join(', ')
+    : null
+
+  return (
+    <div className="config-status-bar">
+      <span className="config-status-bar-label">Status atual</span>
+
+      <div className={`config-status-pill config-status-pill--${hasAI ? 'ok' : 'empty'}`}>
+        <span className="config-status-pill-dot" />
+        {hasAI ? config.ai_model : 'IA não configurada'}
+      </div>
+
+      <div className={`config-status-pill config-status-pill--${hasNotif ? 'ok' : 'empty'}`}>
+        <span className="config-status-pill-dot" />
+        {hasNotif ? notifLabel : 'Notificação não configurada'}
+      </div>
+
+      {severitiesLabel && (
+        <div className="config-status-pill config-status-pill--ok">
+          <span className="config-status-pill-dot" />
+          {severitiesLabel}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ── Wizard content ───────────────────────────────────────── */
 interface WizardContentProps {
   onComplete: () => void
 }
@@ -35,15 +73,13 @@ function WizardContent({ onComplete }: WizardContentProps) {
           {PROGRESS_STEPS.map((s, i) => {
             const idx = STEPS.indexOf(s.key)
             const isActive = state.step === s.key
-            const isDone = stepIndex > idx
+            const isDone   = stepIndex > idx
             return (
               <div key={s.key} className="wizard-step-item">
                 {i > 0 && (
                   <div className={`wizard-connector ${isDone || isActive ? 'done' : ''}`} />
                 )}
-                <div
-                  className={`wizard-step-dot ${isActive ? 'active' : ''} ${isDone ? 'done' : ''}`}
-                >
+                <div className={`wizard-step-dot ${isActive ? 'active' : ''} ${isDone ? 'done' : ''}`}>
                   {isDone ? '✓' : i + 1}
                 </div>
                 <div className={`wizard-step-label ${isActive ? 'active' : ''}`}>{s.label}</div>
@@ -53,18 +89,19 @@ function WizardContent({ onComplete }: WizardContentProps) {
         </div>
       )}
 
-      {state.step === 'welcome' && <StepWelcome />}
-      {state.step === 'ai' && <StepAI />}
+      {state.step === 'welcome'      && <StepWelcome />}
+      {state.step === 'ai'           && <StepAI />}
       {state.step === 'notification' && <StepNotification />}
-      {state.step === 'filters' && <StepFilters />}
-      {state.step === 'review' && <StepReview />}
-      {state.step === 'done' && (
+      {state.step === 'filters'      && <StepFilters />}
+      {state.step === 'review'       && <StepReview />}
+      {state.step === 'done'         && (
         <StepDone onComplete={onComplete} onReconfigure={() => {}} />
       )}
     </div>
   )
 }
 
+/* ── SetupPage ────────────────────────────────────────────── */
 export interface SetupPageProps {
   onComplete: () => void
 }
@@ -84,8 +121,11 @@ export function SetupPage({ onComplete }: SetupPageProps) {
   }
 
   return (
-    <WizardProvider initialData={config ?? {}}>
-      <WizardContent onComplete={onComplete} />
-    </WizardProvider>
+    <div className="content-constrained">
+      {config && <ConfigStatusBar config={config} />}
+      <WizardProvider initialData={config ?? {}}>
+        <WizardContent onComplete={onComplete} />
+      </WizardProvider>
+    </div>
   )
 }

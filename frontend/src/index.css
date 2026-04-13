@@ -176,6 +176,12 @@ html, body, #root {
   min-width: 0;
 }
 
+/* ── Content max-width wrapper ───────────────────────────────── */
+.content-constrained {
+  max-width: 900px;
+  width: 100%;
+}
+
 /* ── Page header ─────────────────────────────────────────────── */
 .page-header { margin-bottom: 24px; }
 
@@ -931,6 +937,161 @@ details[open] summary { margin-bottom: 14px; }
   flex: 1;
 }
 
+/* ── Flow canvas scroll wrapper ─────────────────────────────── */
+.flow-scroll-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+  border-radius: var(--radius);
+}
+
+.flow-scroll-wrapper::-webkit-scrollbar        { height: 6px; }
+.flow-scroll-wrapper::-webkit-scrollbar-track  { background: transparent; }
+.flow-scroll-wrapper::-webkit-scrollbar-thumb  {
+  background: var(--border-strong);
+  border-radius: 3px;
+}
+
+.flow-canvas-inner { min-width: 900px; }
+
+/* ── Config status bar ───────────────────────────────────────── */
+.config-status-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 11px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 20px;
+  box-shadow: var(--shadow-xs);
+}
+
+.config-status-bar-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  margin-right: 2px;
+}
+
+.config-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1.5px solid transparent;
+  white-space: nowrap;
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.config-status-pill--ok    { background: var(--success-light); color: #065f46; border-color: #a7f3d0; }
+.config-status-pill--warn  { background: var(--warning-light); color: #92400e; border-color: #fde68a; }
+.config-status-pill--empty { background: var(--surface-alt);   color: var(--text-muted); border-color: var(--border); }
+
+.config-status-pill-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.config-status-pill--ok    .config-status-pill-dot { background: var(--success); }
+.config-status-pill--warn  .config-status-pill-dot { background: var(--warning); }
+.config-status-pill--empty .config-status-pill-dot { background: var(--border-strong); }
+
+/* ── Pipeline header bar ─────────────────────────────────────── */
+.pipeline-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.pipeline-header-title {
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pipeline-stats {
+  display: flex;
+  align-items: center;
+}
+
+.pipeline-stat {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 0 12px;
+  border-left: 1px solid var(--border);
+}
+
+.pipeline-stat:first-child {
+  border-left: none;
+  padding-left: 0;
+}
+
+.pipeline-stat-value {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* ── Node inspector empty state ──────────────────────────────── */
+.node-inspector-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 20px;
+  text-align: center;
+  gap: 10px;
+}
+
+.node-inspector-empty-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius);
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-light);
+  margin-bottom: 4px;
+}
+
+.node-inspector-empty-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -.01em;
+}
+
+.node-inspector-empty-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  max-width: 180px;
+}
+
 .btn-icon {
   background: none;
   border: none;
@@ -948,6 +1109,7 @@ details[open] summary { margin-bottom: 14px; }
 /* ── Prompt textarea ─────────────────────────────────────────── */
 .prompt-textarea {
   width: 100%;
+  max-width: 860px;
   min-height: 460px;
   padding: 16px 18px;
   font-family: var(--font-mono);
@@ -960,6 +1122,8 @@ details[open] summary { margin-bottom: 14px; }
   resize: vertical;
   outline: none;
   display: block;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .prompt-textarea:focus { box-shadow: none; }
@@ -999,6 +1163,32 @@ details[open] summary { margin-bottom: 14px; }
 @media (max-width: 1024px) {
   .main { padding: 22px 24px 36px; }
   .status-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+}
+
+/* ══════════════════════════════════════
+   RESPONSIVE — TABLET  ( ≤ 768px )
+══════════════════════════════════════ */
+@media (max-width: 768px) {
+  .main { padding: 18px 18px 32px; }
+
+  .form-grid { grid-template-columns: 1fr; gap: 12px; }
+  .form-field.full { grid-column: 1; }
+  .provider-cards { grid-template-columns: 1fr; }
+  .welcome-features { grid-template-columns: 1fr; }
+
+  .wizard-progress {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    justify-content: flex-start;
+    padding: 0 4px 8px;
+    scrollbar-width: none;
+    flex-wrap: nowrap;
+  }
+  .wizard-progress::-webkit-scrollbar { display: none; }
+  .wizard-connector { width: 36px; min-width: 24px; }
+
+  .node-inspector { width: 100%; margin-top: 12px; }
+  .flow-canvas-inner { min-width: 700px; }
 }
 
 /* ══════════════════════════════════════
@@ -1181,7 +1371,8 @@ details[open] summary { margin-bottom: 14px; }
   }
 
   /* ── Prompt textarea ── */
-  .prompt-textarea { min-height: 300px; font-size: 12.5px; }
+  .prompt-textarea { min-height: 300px; font-size: 12.5px; max-width: 100%; }
+  .flow-canvas-inner { min-width: 600px; }
 
   /* ── Node inspector → full-width on mobile ── */
   .node-inspector {
