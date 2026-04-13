@@ -125,12 +125,14 @@ export function FlowTab() {
     if (d.configKey) setSelectedKey(d.configKey)
   }, [])
 
+  const isMobile = typeof window !== 'undefined' && window.innerWidth <= 640
+
   return (
-    <div style={{ display: 'flex', gap: 16 }}>
+    <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 14 }}>
       <div
         style={{
           flex: 1,
-          height: 320,
+          height: isMobile ? 240 : 320,
           border: '1px solid var(--border)',
           borderRadius: 'var(--radius)',
           overflow: 'hidden',
