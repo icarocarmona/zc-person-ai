@@ -1,14 +1,21 @@
 import logging
+import os
 import sys
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import AsyncGenerator
 
 import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
+from app.config_store import ensure_runtime_config, load_from_db, write_runtime_config
+from app.db import close_pool, create_pool, init_schema
 from app.routers import webhook
+from app.routers import config as config_router
+from app.routers import status as status_router
 from app.services.ai_service import AIService
 from app.services.dedup_service import DedupService
 from app.services.whatsapp_service import WhatsAppService
@@ -33,23 +40,81 @@ def configure_logging(log_level: str) -> None:
     )
 
 
+async def reload_services(app: FastAPI) -> None:
+    """Re-cria os serviços com as configurações mais recentes do banco."""
+    log = structlog.get_logger(__name__)
+    try:
+        if hasattr(app.state, "dedup_service"):
+            await app.state.dedup_service.close()
+
+        # Limpa cache para que get_settings() releia runtime_config.json
+        get_settings.cache_clear()
+
+        new_settings = get_settings()
+        configure_logging(new_settings.log_level)
+        app.state.settings = new_settings
+        app.state.dedup_service = DedupService()
+        app.state.ai_service = AIService()
+        app.state.whatsapp_service = WhatsAppService()
+
+        log.info("app.services_reloaded", model=new_settings.ai_model)
+    except Exception as exc:
+        log.error("app.reload_failed", error=str(exc))
+        raise
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    # ------------------------------------------------------------------
+    # 1. Conectar ao banco de configurações
+    # ------------------------------------------------------------------
+    db_url = os.environ.get(
+        "CONFIG_DATABASE_URL",
+        "postgresql://agent:agent_secret@postgres-config/agent_config",
+    )
+    pool = await create_pool(db_url)
+    await init_schema(pool)
+    app.state.db_pool = pool
+
+    # ------------------------------------------------------------------
+    # 2. Carregar config do banco → escrever runtime_config.json
+    # ------------------------------------------------------------------
+    db_config = await load_from_db(pool)
+    if db_config:
+        write_runtime_config(db_config)
+    else:
+        ensure_runtime_config()
+
+    # ------------------------------------------------------------------
+    # 3. Inicializar settings + serviços
+    # ------------------------------------------------------------------
     settings = get_settings()
     configure_logging(settings.log_level)
 
     log = structlog.get_logger(__name__)
-    log.info("app.startup", model=settings.ai_model, ai_base_url=settings.ai_base_url)
+    log.info(
+        "app.startup",
+        model=settings.ai_model,
+        ai_base_url=settings.ai_base_url,
+        db_config_loaded=db_config is not None,
+    )
 
+    app.state.settings = settings
     app.state.dedup_service = DedupService()
     app.state.ai_service = AIService()
     app.state.whatsapp_service = WhatsAppService()
+    # Expõe reload como callable para os routers sem criar import circular
+    app.state.reload_services = lambda: reload_services(app)
 
     log.info("app.services_initialized")
 
     yield
 
+    # ------------------------------------------------------------------
+    # Shutdown
+    # ------------------------------------------------------------------
     await app.state.dedup_service.close()
+    await close_pool(pool)
     log.info("app.shutdown")
 
 
@@ -72,6 +137,8 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(webhook.router, tags=["Webhook"])
+    app.include_router(config_router.router, tags=["Config"])
+    app.include_router(status_router.router, tags=["Status"])
 
     @app.get("/health", tags=["Health"], summary="Health check")
     async def health() -> dict:
@@ -80,6 +147,11 @@ def create_app() -> FastAPI:
             "status": "healthy" if redis_ok else "degraded",
             "redis": "ok" if redis_ok else "error",
         }
+
+    # Serve frontend em produção (build em frontend/dist)
+    frontend_dist = Path(__file__).parent.parent / "frontend" / "dist"
+    if frontend_dist.exists():
+        app.mount("/", StaticFiles(directory=str(frontend_dist), html=True), name="frontend")
 
     return app
 
