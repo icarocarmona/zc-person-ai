@@ -16,9 +16,11 @@ from app.db import close_pool, create_pool, init_schema
 from app.routers import webhook
 from app.routers import config as config_router
 from app.routers import status as status_router
+from app.routers import prompt as prompt_router
 from app.services.ai_service import AIService
 from app.services.dedup_service import DedupService
 from app.services.whatsapp_service import WhatsAppService
+from app.services.telegram_service import TelegramService
 
 
 def configure_logging(log_level: str) -> None:
@@ -47,7 +49,6 @@ async def reload_services(app: FastAPI) -> None:
         if hasattr(app.state, "dedup_service"):
             await app.state.dedup_service.close()
 
-        # Limpa cache para que get_settings() releia runtime_config.json
         get_settings.cache_clear()
 
         new_settings = get_settings()
@@ -56,8 +57,9 @@ async def reload_services(app: FastAPI) -> None:
         app.state.dedup_service = DedupService()
         app.state.ai_service = AIService()
         app.state.whatsapp_service = WhatsAppService()
+        app.state.telegram_service = TelegramService()
 
-        log.info("app.services_reloaded", model=new_settings.ai_model)
+        log.info("app.services_reloaded", model=new_settings.ai_model, channel=new_settings.notification_channel)
     except Exception as exc:
         log.error("app.reload_failed", error=str(exc))
         raise
@@ -65,9 +67,7 @@ async def reload_services(app: FastAPI) -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    # ------------------------------------------------------------------
     # 1. Conectar ao banco de configurações
-    # ------------------------------------------------------------------
     db_url = os.environ.get(
         "CONFIG_DATABASE_URL",
         "postgresql://agent:agent_secret@postgres-config/agent_config",
@@ -76,18 +76,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await init_schema(pool)
     app.state.db_pool = pool
 
-    # ------------------------------------------------------------------
     # 2. Carregar config do banco → escrever runtime_config.json
-    # ------------------------------------------------------------------
     db_config = await load_from_db(pool)
     if db_config:
         write_runtime_config(db_config)
     else:
         ensure_runtime_config()
 
-    # ------------------------------------------------------------------
     # 3. Inicializar settings + serviços
-    # ------------------------------------------------------------------
     settings = get_settings()
     configure_logging(settings.log_level)
 
@@ -95,7 +91,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     log.info(
         "app.startup",
         model=settings.ai_model,
-        ai_base_url=settings.ai_base_url,
+        channel=settings.notification_channel,
         db_config_loaded=db_config is not None,
     )
 
@@ -103,16 +99,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.dedup_service = DedupService()
     app.state.ai_service = AIService()
     app.state.whatsapp_service = WhatsAppService()
-    # Expõe reload como callable para os routers sem criar import circular
+    app.state.telegram_service = TelegramService()
     app.state.reload_services = lambda: reload_services(app)
 
     log.info("app.services_initialized")
 
     yield
 
-    # ------------------------------------------------------------------
-    # Shutdown
-    # ------------------------------------------------------------------
     await app.state.dedup_service.close()
     await close_pool(pool)
     log.info("app.shutdown")
@@ -123,9 +116,9 @@ def create_app() -> FastAPI:
         title="Zabbix Critical Alert Agent",
         description=(
             "Recebe alertas críticos do Zabbix, analisa com IA "
-            "e envia diagnóstico via WhatsApp."
+            "e envia diagnóstico via WhatsApp ou Telegram."
         ),
-        version="1.0.0",
+        version="2.0.0",
         lifespan=lifespan,
     )
 
@@ -139,6 +132,7 @@ def create_app() -> FastAPI:
     app.include_router(webhook.router, tags=["Webhook"])
     app.include_router(config_router.router, tags=["Config"])
     app.include_router(status_router.router, tags=["Status"])
+    app.include_router(prompt_router.router, tags=["Prompt"])
 
     @app.get("/health", tags=["Health"], summary="Health check")
     async def health() -> dict:
@@ -148,7 +142,6 @@ def create_app() -> FastAPI:
             "redis": "ok" if redis_ok else "error",
         }
 
-    # Serve frontend em produção (build em frontend/dist)
     frontend_dist = Path(__file__).parent.parent / "frontend" / "dist"
     if frontend_dist.exists():
         app.mount("/", StaticFiles(directory=str(frontend_dist), html=True), name="frontend")

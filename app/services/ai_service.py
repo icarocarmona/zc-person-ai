@@ -118,10 +118,13 @@ class AIService:
             model=self._model,
         )
 
+        # Usa prompt customizado (banco) se existir, senão o padrão embutido
+        active_prompt = get_settings().system_prompt or SYSTEM_PROMPT
+
         response = await self._client.chat.completions.create(
             model=self._model,
             messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "system", "content": active_prompt},
                 {"role": "user", "content": user_message},
             ],
             max_tokens=2048,

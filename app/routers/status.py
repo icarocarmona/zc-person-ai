@@ -54,7 +54,6 @@ async def get_status(request: Request) -> dict:
                     for inst in instances
                     if inst.get("instance", {}).get("instanceName")
                 ]
-                # Verifica se a instância configurada está conectada
                 for inst in instances:
                     name = inst.get("instance", {}).get("instanceName", "")
                     state = inst.get("instance", {}).get("connectionStatus", "")
@@ -64,21 +63,37 @@ async def get_status(request: Request) -> dict:
         pass
 
     # ------------------------------------------------------------------
-    # AI provider (verifica apenas se está configurado — evita custo de API)
+    # AI provider
     # ------------------------------------------------------------------
     ai_configured = bool(settings.ai_api_key and not settings.ai_api_key.endswith("***"))
     provider = "openrouter" if "openrouter" in settings.ai_base_url else "openai"
+
+    # ------------------------------------------------------------------
+    # Telegram (verificado apenas quando canal = telegram)
+    # ------------------------------------------------------------------
+    telegram_ok = False
+    telegram_bot_username: str | None = None
+    telegram_enabled = settings.notification_channel == "telegram"
+    if telegram_enabled and settings.telegram_bot_token:
+        try:
+            result = await app.state.telegram_service.get_me()
+            if result.get("ok"):
+                telegram_ok = True
+                telegram_bot_username = result.get("result", {}).get("username")
+        except Exception:
+            pass
 
     return {
         "redis": {"ok": redis_ok, "latency_ms": redis_latency_ms},
         "database": {"ok": db_ok},
         "evolution_api": {"ok": evolution_ok, "instances": evolution_instances},
-        "ai_provider": {
-            "ok": ai_configured,
-            "provider": provider,
-            "model": settings.ai_model,
-        },
+        "ai_provider": {"ok": ai_configured, "provider": provider, "model": settings.ai_model},
         "whatsapp_connected": whatsapp_connected,
+        "telegram": {
+            "ok": telegram_ok,
+            "bot_username": telegram_bot_username,
+            "enabled": telegram_enabled,
+        },
     }
 
 
@@ -90,5 +105,20 @@ async def test_whatsapp(request: Request) -> dict:
             "🔔 *Teste de conexão* — Zabbix Alert Agent está operacional!"
         )
         return {"status": "sent", "message_id": result.get("key", {}).get("id", "unknown")}
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Falha ao enviar mensagem: {exc}")
+
+
+@router.post("/test/telegram", summary="Envia mensagem de teste via Telegram")
+async def test_telegram(request: Request) -> dict:
+    app = request.app
+    try:
+        result = await app.state.telegram_service.send_message(
+            "🔔 <b>Teste de conexão</b> — Zabbix Alert Agent está operacional!"
+        )
+        return {
+            "status": "sent",
+            "message_id": result.get("result", {}).get("message_id", "unknown"),
+        }
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Falha ao enviar mensagem: {exc}")

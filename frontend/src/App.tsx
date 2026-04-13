@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { Settings2, Activity, Zap } from 'lucide-react'
+import { Settings2, Activity, Zap, GitBranch } from 'lucide-react'
 import { SetupPage } from './pages/Setup'
 import { StatusPage } from './pages/Status'
+import { FlowPage } from './pages/Flow'
 
-type Page = 'setup' | 'status'
+type Page = 'status' | 'setup' | 'flow'
 
 export default function App() {
   const [page, setPage] = useState<Page>('status')
@@ -19,7 +20,7 @@ export default function App() {
             </div>
             <div className="sidebar-logo-text">
               <span className="sidebar-logo-title">Zabbix Agent</span>
-              <span className="sidebar-logo-sub">Alert · AI · WhatsApp</span>
+              <span className="sidebar-logo-sub">Alert · AI · Notify</span>
             </div>
           </div>
         </div>
@@ -39,12 +40,21 @@ export default function App() {
             <Settings2 size={15} />
             Configuração
           </button>
+          <button
+            className={`nav-item ${page === 'flow' ? 'active' : ''}`}
+            onClick={() => setPage('flow')}
+          >
+            <GitBranch size={15} />
+            Fluxo & Prompt
+          </button>
         </div>
       </nav>
 
       {/* ── Main ── */}
       <main className="main">
-        {page === 'status' ? <StatusPage /> : <SetupPage />}
+        {page === 'status' && <StatusPage />}
+        {page === 'setup' && <SetupPage onComplete={() => setPage('status')} />}
+        {page === 'flow' && <FlowPage />}
       </main>
     </div>
   )

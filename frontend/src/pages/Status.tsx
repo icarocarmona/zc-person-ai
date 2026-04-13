@@ -1,7 +1,7 @@
 import { useQuery, useMutation } from '@tanstack/react-query'
-import { RefreshCw, Send, CheckCircle, AlertCircle } from 'lucide-react'
+import { RefreshCw, Send, MessageSquare, CheckCircle, AlertCircle } from 'lucide-react'
 import { useState } from 'react'
-import { getStatus, testWhatsApp } from '../api/client'
+import { getStatus, testWhatsApp, testTelegram, getConfig } from '../api/client'
 import { ServiceCard } from '../components/ServiceCard'
 
 export function StatusPage() {
@@ -13,11 +13,26 @@ export function StatusPage() {
     refetchInterval: 30_000,
   })
 
-  const testMutation = useMutation({
+  const { data: config } = useQuery({
+    queryKey: ['config'],
+    queryFn: getConfig,
+  })
+
+  const isTelegram = config?.notification_channel === 'telegram'
+
+  const testWAMutation = useMutation({
     mutationFn: testWhatsApp,
     onSuccess: () => setTestMsg({ ok: true, text: 'Mensagem enviada com sucesso!' }),
     onError: (e: Error) => setTestMsg({ ok: false, text: e.message }),
   })
+
+  const testTGMutation = useMutation({
+    mutationFn: testTelegram,
+    onSuccess: () => setTestMsg({ ok: true, text: 'Mensagem enviada via Telegram!' }),
+    onError: (e: Error) => setTestMsg({ ok: false, text: e.message }),
+  })
+
+  const testMutation = isTelegram ? testTGMutation : testWAMutation
 
   const loading = isLoading ? null : undefined
 
@@ -53,16 +68,6 @@ export function StatusPage() {
           value={data?.database.ok ? 'Online' : 'Offline'}
         />
         <ServiceCard
-          name="Evolution API"
-          ok={loading ?? (data?.evolution_api.ok ?? false)}
-          value={data?.evolution_api.ok ? 'Online' : 'Offline'}
-          meta={
-            data?.evolution_api.instances?.length
-              ? `${data.evolution_api.instances.length} instância(s)`
-              : undefined
-          }
-        />
-        <ServiceCard
           name="Provedor de IA"
           ok={loading ?? (data?.ai_provider.ok ?? false)}
           value={data?.ai_provider.ok ? 'Configurado' : 'Não configurado'}
@@ -72,27 +77,57 @@ export function StatusPage() {
               : undefined
           }
         />
-        <ServiceCard
-          name="WhatsApp"
-          ok={loading ?? (data?.whatsapp_connected ?? false)}
-          value={data?.whatsapp_connected ? 'Conectado' : 'Desconectado'}
-          meta="Instância Evolution API"
-        />
+
+        {/* WhatsApp card — only when channel is whatsapp */}
+        {!isTelegram && (
+          <ServiceCard
+            name="Evolution API"
+            ok={loading ?? (data?.evolution_api.ok ?? false)}
+            value={data?.evolution_api.ok ? 'Online' : 'Offline'}
+            meta={
+              data?.evolution_api.instances?.length
+                ? `${data.evolution_api.instances.length} instância(s)`
+                : undefined
+            }
+          />
+        )}
+        {!isTelegram && (
+          <ServiceCard
+            name="WhatsApp"
+            ok={loading ?? (data?.whatsapp_connected ?? false)}
+            value={data?.whatsapp_connected ? 'Conectado' : 'Desconectado'}
+            meta="Instância Evolution API"
+          />
+        )}
+
+        {/* Telegram card — only when channel is telegram */}
+        {isTelegram && (
+          <ServiceCard
+            name="Telegram Bot"
+            ok={loading ?? (data?.telegram?.ok ?? false)}
+            value={data?.telegram?.ok ? 'Conectado' : 'Desconectado'}
+            meta={data?.telegram?.bot_username ? `@${data.telegram.bot_username}` : undefined}
+          />
+        )}
       </div>
 
+      {/* Test notification card */}
       <div className="card">
         <div className="card-header">
           <div>
-            <div className="card-title"><Send size={15} /> Testar WhatsApp</div>
+            <div className="card-title">
+              {isTelegram ? <><MessageSquare size={15} /> Testar Telegram</> : <><Send size={15} /> Testar WhatsApp</>}
+            </div>
             <div className="card-desc">
-              Envia uma mensagem de teste para o número configurado.
+              {isTelegram
+                ? 'Envia uma mensagem de teste para o chat configurado.'
+                : 'Envia uma mensagem de teste para o número configurado.'}
             </div>
           </div>
         </div>
         <div className="card-body">
           {testMsg && (
             <div
-              className="flex items-center gap-8 mt-8"
               style={{
                 padding: '10px 14px',
                 borderRadius: 6,
@@ -100,25 +135,31 @@ export function StatusPage() {
                 color: testMsg.ok ? '#065f46' : '#991b1b',
                 fontSize: 13,
                 marginBottom: 14,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
               }}
             >
-              {testMsg.ok
-                ? <CheckCircle size={15} />
-                : <AlertCircle size={15} />
-              }
+              {testMsg.ok ? <CheckCircle size={15} /> : <AlertCircle size={15} />}
               {testMsg.text}
             </div>
           )}
 
           <button
             className="btn btn-primary"
-            onClick={() => { setTestMsg(null); testMutation.mutate() }}
+            onClick={() => {
+              setTestMsg(null)
+              testMutation.mutate()
+            }}
             disabled={testMutation.isPending}
           >
-            {testMutation.isPending
-              ? <><div className="spinner" /> Enviando...</>
-              : <><Send size={14} /> Enviar mensagem de teste</>
-            }
+            {testMutation.isPending ? (
+              <><div className="spinner" /> Enviando...</>
+            ) : isTelegram ? (
+              <><MessageSquare size={14} /> Enviar mensagem de teste</>
+            ) : (
+              <><Send size={14} /> Enviar mensagem de teste</>
+            )}
           </button>
         </div>
       </div>
