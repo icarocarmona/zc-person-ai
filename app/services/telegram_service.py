@@ -47,7 +47,7 @@ class TelegramService:
                 json={
                     "chat_id": self._chat_id,
                     "text": text,
-                    "parse_mode": "HTML",
+                    "parse_mode": "Markdown",
                 },
             )
             response.raise_for_status()

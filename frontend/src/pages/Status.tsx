@@ -1,11 +1,39 @@
 import { useQuery, useMutation } from '@tanstack/react-query'
-import { RefreshCw, Send, MessageSquare, CheckCircle, AlertCircle } from 'lucide-react'
+import { RefreshCw, Send, CheckCircle, AlertCircle } from 'lucide-react'
 import { useState } from 'react'
-import { getStatus, testWhatsApp, testTelegram, getConfig } from '../api/client'
+import { getStatus, testAll, getConfig, TestResult } from '../api/client'
 import { ServiceCard } from '../components/ServiceCard'
 
+function TestResultMessage({ result }: { result: TestResult }) {
+  const entries = Object.entries(result.channels) as [string, { sent: boolean; message_id?: string; error?: string }][]
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
+      {entries.map(([channel, info]) => (
+        <div
+          key={channel}
+          style={{
+            padding: '10px 14px',
+            borderRadius: 6,
+            background: info.sent ? 'var(--success-light)' : 'var(--error-light)',
+            color: info.sent ? '#065f46' : '#991b1b',
+            fontSize: 13,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+          }}
+        >
+          {info.sent ? <CheckCircle size={15} /> : <AlertCircle size={15} />}
+          <strong style={{ textTransform: 'capitalize' }}>{channel}:</strong>
+          {info.sent ? ' mensagem enviada com sucesso!' : ` ${info.error}`}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export function StatusPage() {
-  const [testMsg, setTestMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [testResult, setTestResult] = useState<TestResult | null>(null)
+  const [testError, setTestError] = useState<string | null>(null)
 
   const { data, isLoading, refetch, isFetching } = useQuery({
     queryKey: ['status'],
@@ -20,19 +48,11 @@ export function StatusPage() {
 
   const isTelegram = config?.notification_channel === 'telegram'
 
-  const testWAMutation = useMutation({
-    mutationFn: testWhatsApp,
-    onSuccess: () => setTestMsg({ ok: true, text: 'Mensagem enviada com sucesso!' }),
-    onError: (e: Error) => setTestMsg({ ok: false, text: e.message }),
+  const testMutation = useMutation({
+    mutationFn: testAll,
+    onSuccess: (data) => { setTestResult(data); setTestError(null) },
+    onError: (e: Error) => { setTestError(e.message); setTestResult(null) },
   })
-
-  const testTGMutation = useMutation({
-    mutationFn: testTelegram,
-    onSuccess: () => setTestMsg({ ok: true, text: 'Mensagem enviada via Telegram!' }),
-    onError: (e: Error) => setTestMsg({ ok: false, text: e.message }),
-  })
-
-  const testMutation = isTelegram ? testTGMutation : testWAMutation
 
   const loading = isLoading ? null : undefined
 
@@ -116,23 +136,22 @@ export function StatusPage() {
         <div className="card-header">
           <div>
             <div className="card-title">
-              {isTelegram ? <><MessageSquare size={15} /> Testar Telegram</> : <><Send size={15} /> Testar WhatsApp</>}
+              <Send size={15} /> Testar Notificações
             </div>
             <div className="card-desc">
-              {isTelegram
-                ? 'Envia uma mensagem de teste para o chat configurado.'
-                : 'Envia uma mensagem de teste para o número configurado.'}
+              Envia uma mensagem de teste para todos os canais ativos (WhatsApp e/ou Telegram).
             </div>
           </div>
         </div>
         <div className="card-body">
-          {testMsg && (
+          {testResult && <TestResultMessage result={testResult} />}
+          {testError && (
             <div
               style={{
                 padding: '10px 14px',
                 borderRadius: 6,
-                background: testMsg.ok ? 'var(--success-light)' : 'var(--error-light)',
-                color: testMsg.ok ? '#065f46' : '#991b1b',
+                background: 'var(--error-light)',
+                color: '#991b1b',
                 fontSize: 13,
                 marginBottom: 14,
                 display: 'flex',
@@ -140,23 +159,22 @@ export function StatusPage() {
                 gap: 8,
               }}
             >
-              {testMsg.ok ? <CheckCircle size={15} /> : <AlertCircle size={15} />}
-              {testMsg.text}
+              <AlertCircle size={15} />
+              {testError}
             </div>
           )}
 
           <button
             className="btn btn-primary"
             onClick={() => {
-              setTestMsg(null)
+              setTestResult(null)
+              setTestError(null)
               testMutation.mutate()
             }}
             disabled={testMutation.isPending}
           >
             {testMutation.isPending ? (
               <><div className="spinner" /> Enviando...</>
-            ) : isTelegram ? (
-              <><MessageSquare size={14} /> Enviar mensagem de teste</>
             ) : (
               <><Send size={14} /> Enviar mensagem de teste</>
             )}

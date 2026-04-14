@@ -110,6 +110,13 @@ class Settings(BaseSettings):
     allowed_severities: list[str] = Field(default=["High", "Disaster"])
 
     # -------------------------------------------------------------------------
+    # Zabbix (opcional — usado pela tela de integração Zabbix)
+    # -------------------------------------------------------------------------
+    zabbix_url: str = Field(default="", description="URL do Zabbix (ex: http://localhost:8090)")
+    zabbix_api_user: str = Field(default="Admin", description="Usuário da API do Zabbix")
+    zabbix_api_password: str = Field(default="", description="Senha da API do Zabbix")
+
+    # -------------------------------------------------------------------------
     # AI System Prompt (vazio = usa o prompt padrão embutido em ai_service.py)
     # -------------------------------------------------------------------------
     system_prompt: str = Field(
