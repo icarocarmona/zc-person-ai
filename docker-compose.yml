@@ -1,3 +1,5 @@
+name: zc-person-ai
+
 services:
 
   # ---------------------------------------------------------------------------
@@ -220,6 +222,24 @@ services:
     environment:
       ZBX_SERVER_HOST: "zabbix-server"
       ZBX_HOSTNAME: "zabbix-docker-host"
+    networks:
+      - zabbix-agent-net
+    depends_on:
+      - zabbix-server
+    restart: unless-stopped
+
+  # Container de teste — Ubuntu + Zabbix Agent + stress-ng
+  # Usado para simular alertas de CPU, memória, disco, etc.
+  target-server:
+    build:
+      context: ./docker/target
+      dockerfile: Dockerfile
+    container_name: zabbix-target-server
+    hostname: target-server
+    profiles: [zabbix]
+    environment:
+      ZBX_SERVER_HOST: "zabbix-server"
+      ZBX_HOSTNAME: "target-server"
     networks:
       - zabbix-agent-net
     depends_on:

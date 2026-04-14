@@ -1,3 +1,4 @@
+import { Fragment } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useWizard, WizardProvider, STEPS, type WizardStep } from '../context/WizardContext'
 import { getConfig, type Config } from '../api/client'
@@ -75,15 +76,17 @@ function WizardContent({ onComplete }: WizardContentProps) {
             const isActive = state.step === s.key
             const isDone   = stepIndex > idx
             return (
-              <div key={s.key} className="wizard-step-item">
+              <Fragment key={s.key}>
                 {i > 0 && (
                   <div className={`wizard-connector ${isDone || isActive ? 'done' : ''}`} />
                 )}
-                <div className={`wizard-step-dot ${isActive ? 'active' : ''} ${isDone ? 'done' : ''}`}>
-                  {isDone ? '✓' : i + 1}
+                <div className="wizard-step-item">
+                  <div className={`wizard-step-dot ${isActive ? 'active' : ''} ${isDone ? 'done' : ''}`}>
+                    {isDone ? '✓' : i + 1}
+                  </div>
+                  <div className={`wizard-step-label ${isActive ? 'active' : ''}`}>{s.label}</div>
                 </div>
-                <div className={`wizard-step-label ${isActive ? 'active' : ''}`}>{s.label}</div>
-              </div>
+              </Fragment>
             )
           })}
         </div>

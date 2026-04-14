@@ -7,6 +7,7 @@ from app.config import get_settings
 from app.models import ZabbixWebhookPayload
 from app.services.dedup_service import DedupService
 from app.services.ai_service import AIService
+from app.services.metrics_service import MetricsService
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
@@ -18,6 +19,10 @@ def _dedup(request: Request) -> DedupService:
 
 def _ai(request: Request) -> AIService:
     return request.app.state.ai_service  # type: ignore[no-any-return]
+
+
+def _metrics(request: Request) -> MetricsService:
+    return request.app.state.metrics_service  # type: ignore[no-any-return]
 
 
 def _notifier(request: Request):  # type: ignore[return]
@@ -34,6 +39,7 @@ async def receive_zabbix_alert(
     dedup: DedupService = Depends(_dedup),
     ai: AIService = Depends(_ai),
     notifier=Depends(_notifier),
+    metrics: MetricsService = Depends(_metrics),
 ) -> JSONResponse:
     start = time.monotonic()
     settings = get_settings()
@@ -46,10 +52,12 @@ async def receive_zabbix_alert(
         status=payload.status,
     )
     log.info("webhook.received")
+    await metrics.incr("received")
 
     # 1. Filtro de severidade
     if payload.severity not in settings.allowed_severities:
         log.info("webhook.ignored", reason="severity_not_actionable", severity=payload.severity)
+        await metrics.incr("filtered")
         return JSONResponse(
             status_code=200,
             content={
@@ -63,6 +71,7 @@ async def receive_zabbix_alert(
     try:
         if await dedup.is_duplicate(dedup_key):
             log.info("webhook.ignored", reason="duplicate", dedup_key=dedup_key)
+            await metrics.incr("deduplicated")
             return JSONResponse(
                 status_code=200,
                 content={"status": "ignored", "reason": "duplicate within dedup window"},
@@ -70,14 +79,15 @@ async def receive_zabbix_alert(
     except Exception as exc:
         log.warning("webhook.dedup_error_failopen", error=str(exc))
 
-    # 3. Análise de IA
+    # 3. Análise de IA (fail-open: usa mensagem básica se a IA falhar)
     try:
         log.info("webhook.ai_analysis_start")
         report = await ai.analyze_alert(payload)
         log.info("webhook.ai_analysis_complete", priority=report.priority)
     except Exception as exc:
-        log.error("webhook.ai_analysis_failed", error=str(exc), exc_info=True)
-        raise HTTPException(status_code=502, detail=f"AI analysis failed: {exc}")
+        log.warning("webhook.ai_fallback", error=str(exc))
+        report = ai.fallback_report(payload)
+    await metrics.incr("analyzed")
 
     # 4. Envio de notificação (WhatsApp ou Telegram)
     channel = settings.notification_channel
@@ -85,8 +95,10 @@ async def receive_zabbix_alert(
         log.info("webhook.notification_send_start", channel=channel)
         result = await notifier.send_message(report.raw_text)
         log.info("webhook.notification_send_complete", channel=channel)
+        await metrics.incr("notified")
     except Exception as exc:
         log.error("webhook.notification_send_failed", channel=channel, error=str(exc), exc_info=True)
+        await metrics.incr("failed")
         raise HTTPException(status_code=502, detail=f"Notification send failed: {exc}")
 
     elapsed = round(time.monotonic() - start, 2)

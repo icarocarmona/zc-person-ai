@@ -122,3 +122,49 @@ async def test_telegram(request: Request) -> dict:
         }
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Falha ao enviar mensagem: {exc}")
+
+
+@router.post("/test", summary="Envia mensagem de teste para todos os canais ativos")
+async def test_notification(request: Request) -> dict:
+    """Detecta canais configurados e envia para todos os que estiverem ativos."""
+    app = request.app
+    settings = app.state.settings
+    results: dict[str, dict] = {}
+
+    telegram_configured = (
+        settings.notification_channel == "telegram"
+        and bool(settings.telegram_bot_token and settings.telegram_chat_id)
+    )
+    if telegram_configured:
+        try:
+            result = await app.state.telegram_service.send_message(
+                "🔔 <b>Teste de conexão</b> — Zabbix Alert Agent está operacional!"
+            )
+            results["telegram"] = {
+                "sent": True,
+                "message_id": str(result.get("result", {}).get("message_id", "unknown")),
+            }
+        except Exception as exc:
+            results["telegram"] = {"sent": False, "error": str(exc)}
+
+    whatsapp_configured = (
+        settings.notification_channel == "whatsapp"
+        and bool(settings.whatsapp_destination_number and settings.evolution_api_key)
+    )
+    if whatsapp_configured:
+        try:
+            result = await app.state.whatsapp_service.send_message(
+                "🔔 *Teste de conexão* — Zabbix Alert Agent está operacional!"
+            )
+            results["whatsapp"] = {
+                "sent": True,
+                "message_id": str(result.get("key", {}).get("id", "unknown")),
+            }
+        except Exception as exc:
+            results["whatsapp"] = {"sent": False, "error": str(exc)}
+
+    if not results:
+        raise HTTPException(status_code=400, detail="Nenhum canal de notificação configurado")
+
+    all_sent = all(r["sent"] for r in results.values())
+    return {"status": "sent" if all_sent else "partial", "channels": results}

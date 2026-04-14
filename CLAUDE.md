@@ -1,5 +1,21 @@
 # CLAUDE.md — zc-person-ai
 
+## Design System (Frontend)
+
+> **Leia sempre antes de trabalhar no frontend.**  
+> O design system completo está em [`DESIGN_SYSTEM.md`](./DESIGN_SYSTEM.md).
+
+Resumo das regras mais críticas:
+- Background: `#f2f1ed` (creme quente) — nunca `#ffffff`
+- Texto: `#26251e` (quase-preto quente) — nunca `#000`
+- Hover de botão: muda texto para `#cf2d56` (crimson quente)
+- Bordas: `rgba(38, 37, 30, 0.1)` ou `oklab(0.263084 -0.00230259 0.0124794 / 0.1)`
+- Radius: 8px botões/cards, 9999px pills
+- Tipografia: CursorGothic (display), jjannon (body), berkeleyMono (código)
+- Letter-spacing CursorGothic escala com tamanho: 72px→-2.16px, 36px→-0.72px, 26px→-0.325px
+
+---
+
 ## Project Overview
 
 **Zabbix Critical Alert Agent** — recebe alertas críticos do Zabbix, analisa com IA (OpenAI/OpenRouter) e envia relatórios diagnósticos via WhatsApp usando a Evolution API.

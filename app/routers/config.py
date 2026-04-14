@@ -7,7 +7,7 @@ from app.config_store import save_to_db, write_runtime_config
 
 router = APIRouter(prefix="/api")
 
-_SECRET_FIELDS = {"ai_api_key", "evolution_api_key", "telegram_bot_token"}
+_SECRET_FIELDS = {"ai_api_key", "evolution_api_key", "telegram_bot_token", "zabbix_api_password"}
 
 
 def _mask(value: str) -> str:
@@ -36,6 +36,10 @@ class ConfigUpdateRequest(BaseModel):
     # Telegram
     telegram_bot_token: Optional[str] = None
     telegram_chat_id: Optional[str] = None
+    # Zabbix
+    zabbix_url: Optional[str] = None
+    zabbix_api_user: Optional[str] = None
+    zabbix_api_password: Optional[str] = None
     # Misc
     redis_url: Optional[str] = None
     log_level: Optional[str] = None
@@ -89,6 +93,9 @@ async def get_config(request: Request) -> dict:
         "whatsapp_destination_number": s.whatsapp_destination_number,
         "telegram_bot_token": _mask(s.telegram_bot_token),
         "telegram_chat_id": s.telegram_chat_id,
+        "zabbix_url": s.zabbix_url,
+        "zabbix_api_user": s.zabbix_api_user,
+        "zabbix_api_password": _mask(s.zabbix_api_password) if s.zabbix_api_password else "",
         "redis_url": s.redis_url,
         "log_level": s.log_level,
         "dedup_ttl_seconds": s.dedup_ttl_seconds,

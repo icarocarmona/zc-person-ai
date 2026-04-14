@@ -10,10 +10,12 @@ RUNTIME_CONFIG_PATH = Path("runtime_config.json")
 async def load_from_db(pool: Pool) -> dict | None:
     """Lê a configuração salva no banco. Retorna None se ainda não foi configurado."""
     async with pool.acquire() as conn:
-        row = await conn.fetchrow("SELECT config FROM agent_config WHERE id = 1")
+        row = await conn.fetchrow(
+            "SELECT config::text AS config FROM agent_config WHERE id = 1"
+        )
         if row is None:
             return None
-        return dict(row["config"])
+        return json.loads(row["config"])
 
 
 async def save_to_db(pool: Pool, data: dict) -> None:

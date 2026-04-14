@@ -169,7 +169,7 @@ class AIService:
             data = json.loads(text)
         except json.JSONDecodeError:
             logger.warning("ai.json_parse_failed", raw_text=text[:300])
-            return self._fallback_report(payload)
+            return self.fallback_report(payload)
 
         whatsapp_msg = data.get("whatsapp_message") or self._format_whatsapp_message(data, payload)
 
@@ -182,7 +182,7 @@ class AIService:
             raw_text=whatsapp_msg,
         )
 
-    def _fallback_report(self, payload: ZabbixWebhookPayload) -> DiagnosticReport:
+    def fallback_report(self, payload: ZabbixWebhookPayload) -> DiagnosticReport:
         msg = (
             f"🟠 *ALERTA ALTO — ZABBIX*\n\n"
             f"🖥️ *Host*: {payload.host}\n"

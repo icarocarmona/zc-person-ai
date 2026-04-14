@@ -1,14 +1,16 @@
 import { useState } from 'react'
-import { Settings2, Activity, Zap, GitBranch } from 'lucide-react'
+import { Settings2, Activity, Zap, GitBranch, Server } from 'lucide-react'
 import { SetupPage } from './pages/Setup'
 import { StatusPage } from './pages/Status'
 import { FlowPage } from './pages/Flow'
+import { ZabbixPage } from './pages/Zabbix'
 
-type Page = 'status' | 'setup' | 'flow'
+type Page = 'status' | 'setup' | 'flow' | 'zabbix'
 
 const NAV = [
   { key: 'status' as Page,  icon: Activity,   label: 'Status' },
   { key: 'setup'  as Page,  icon: Settings2,  label: 'Configurar' },
+  { key: 'zabbix' as Page,  icon: Server,     label: 'Zabbix' },
   { key: 'flow'   as Page,  icon: GitBranch,  label: 'Fluxo' },
 ]
 
@@ -60,6 +62,7 @@ export default function App() {
       <main className="main">
         {page === 'status' && <StatusPage />}
         {page === 'setup'  && <SetupPage onComplete={() => setPage('status')} />}
+        {page === 'zabbix' && <ZabbixPage />}
         {page === 'flow'   && <FlowPage />}
       </main>
 
