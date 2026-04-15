@@ -22,7 +22,7 @@ Resumo das regras mais críticas:
 
 **Fluxo principal:**
 ```
-POST /webhook/zabbix → Filtro de severidade → Dedup Redis → Análise OpenAI → Evolution API → WhatsApp
+POST /webhook/zabbix → Filtro de severidade → Dedup Redis → Análise OpenAI → WhatsApp / Telegram
 ```
 
 ## Tech Stack
@@ -30,7 +30,10 @@ POST /webhook/zabbix → Filtro de severidade → Dedup Redis → Análise OpenA
 - **Python 3.12** + **FastAPI** (Uvicorn/Gunicorn, 2 workers)
 - **OpenAI SDK** (`AsyncOpenAI`) — compatível com OpenRouter
 - **Redis 7.2** — deduplicação via `SET NX EX`
+- **PostgreSQL** — persistência de configurações (`config_store.py`)
 - **Evolution API v2** — gateway WhatsApp self-hosted
+- **Telegram Bot API** — canal alternativo de notificação
+- **React + Vite** — interface web de configuração (`frontend/`)
 - **Docker Compose** — orquestração completa
 
 Dependências principais: `openai`, `redis`, `httpx`, `pydantic-settings`, `structlog`, `tenacity`
@@ -41,13 +44,35 @@ Dependências principais: `openai`, `redis`, `httpx`, `pydantic-settings`, `stru
 app/
 ├── main.py              # FastAPI app + lifespan (inicializa serviços)
 ├── config.py            # Pydantic Settings — toda validação de env vars aqui
+├── config_store.py      # Persistência de config no PostgreSQL
 ├── models.py            # ZabbixWebhookPayload, DiagnosticReport
 ├── routers/
-│   └── webhook.py       # POST /webhook/zabbix (filtro, dedup, orquestração)
-└── services/
-    ├── ai_service.py        # Análise IA, prompt em pt-BR, retry tenacity
-    ├── dedup_service.py     # Redis SET NX EX, fail-open
-    └── whatsapp_service.py  # HTTP client Evolution API, retry tenacity
+│   ├── webhook.py       # POST /webhook/zabbix (filtro, dedup, orquestração)
+│   ├── config.py        # GET/POST /config — lê e salva configuração
+│   ├── status.py        # GET /api/status + POST /api/test/*
+│   ├── metrics.py       # GET /metrics/pipeline
+│   └── zabbix.py        # GET /api/zabbix/status + POST /api/zabbix/configure
+├── services/
+│   ├── ai_service.py        # Análise IA, prompt pt-BR, retry tenacity
+│   ├── dedup_service.py     # Redis SET NX EX, fail-open
+│   ├── whatsapp_service.py  # HTTP client Evolution API, retry tenacity
+│   ├── telegram_service.py  # HTTP client Telegram Bot API
+│   ├── telegram_bot.py      # Lógica do bot Telegram
+│   └── metrics_service.py   # Coleta e exposição de métricas
+└── tools/               # Ferramentas de diagnóstico Zabbix (uso pela IA)
+    ├── _zabbix.py           # Cliente base Zabbix API
+    ├── cpu_tool.py          # Métricas de CPU por host
+    ├── hosts_tool.py        # Lista e status de hosts
+    ├── problems_tool.py     # Problemas ativos
+    └── diagnose_tool.py     # Diagnóstico completo de host
+frontend/
+└── src/
+    ├── pages/
+    │   ├── Setup.tsx        # Wizard de configuração (4 passos)
+    │   ├── Status.tsx       # Dashboard de status dos serviços
+    │   └── Zabbix.tsx       # Configuração do Zabbix via UI
+    └── components/
+        └── flow/FlowTab.tsx # Editor visual do pipeline
 zabbix/
 └── media_type.json      # Config do webhook no Zabbix (importar via UI)
 ```
@@ -75,13 +100,16 @@ curl -X POST http://localhost:8000/webhook/zabbix \
 
 ## Configuração (Variáveis de Ambiente)
 
-Copiar `.env.example` → `.env` e preencher:
+Copiar `.env.example` → `.env` e preencher (ou usar o Setup wizard na UI):
 
 | Variável | Obrigatória | Descrição |
 |---|---|---|
 | `AI_API_KEY` | Sim | OpenAI ou OpenRouter API key |
-| `EVOLUTION_API_KEY` | Sim | Chave da Evolution API |
-| `WHATSAPP_DESTINATION_NUMBER` | Sim | Telefone com DDI (só dígitos) |
+| `NOTIFICATION_CHANNEL` | Não | `whatsapp` (padrão) ou `telegram` |
+| `EVOLUTION_API_KEY` | Canal WhatsApp | Chave da Evolution API |
+| `WHATSAPP_DESTINATION_NUMBER` | Canal WhatsApp | Telefone com DDI (só dígitos) |
+| `TELEGRAM_BOT_TOKEN` | Canal Telegram | Token do bot (BotFather) |
+| `TELEGRAM_CHAT_ID` | Canal Telegram | Chat ID do destino |
 | `AI_BASE_URL` | Não | Default: `https://api.openai.com/v1` |
 | `AI_MODEL` | Não | Default: `gpt-4o` |
 | `ALLOWED_SEVERITIES` | Não | Default: `High,Disaster` |
@@ -111,3 +139,12 @@ AI_MODEL=anthropic/claude-sonnet-4-5
 |---|---|---|
 | `POST` | `/webhook/zabbix` | Recebe alertas do Zabbix |
 | `GET` | `/health` | Health check dos serviços |
+| `GET` | `/api/status` | Status detalhado de cada serviço |
+| `POST` | `/api/test/whatsapp` | Envia mensagem de teste via WhatsApp |
+| `POST` | `/api/test/telegram` | Envia mensagem de teste via Telegram |
+| `POST` | `/api/test` | Envia teste para todos os canais ativos |
+| `GET` | `/config` | Retorna configuração atual (secrets mascarados) |
+| `POST` | `/config` | Salva configuração e recarrega os serviços |
+| `GET` | `/metrics/pipeline` | Métricas por estágio do pipeline de alertas |
+| `GET` | `/api/zabbix/status` | Verifica conexão e configuração do Zabbix |
+| `POST` | `/api/zabbix/configure` | Cria/atualiza media type e action no Zabbix |

@@ -1,6 +1,6 @@
 # Zabbix Critical Alert Agent
 
-Agente que recebe alertas críticos do Zabbix, analisa com IA e envia diagnóstico + soluções para o cliente via WhatsApp.
+Agente que recebe alertas críticos do Zabbix, analisa com IA e envia diagnóstico + soluções via **WhatsApp** ou **Telegram**. Inclui interface web para configuração completa sem editar arquivos.
 
 ## Stack
 
@@ -9,7 +9,9 @@ Agente que recebe alertas críticos do Zabbix, analisa com IA e envia diagnósti
 | API do agente | Python 3.12 + FastAPI |
 | IA | OpenAI `gpt-4o` (ou OpenRouter — mesma SDK) |
 | WhatsApp gateway | Evolution API v2 (self-hosted) |
+| Telegram gateway | Bot API (via token BotFather) |
 | Deduplicação | Redis |
+| Persistência config | PostgreSQL |
 | Zabbix (testes locais) | Zabbix 7.0 + PostgreSQL |
 | Orquestração | Docker Compose |
 
@@ -17,8 +19,17 @@ Agente que recebe alertas críticos do Zabbix, analisa com IA e envia diagnósti
 
 ```
 Zabbix → POST /webhook/zabbix → filtro severidade → dedup Redis
-    → OpenAI (diagnóstico pt-BR) → Evolution API → WhatsApp cliente
+    → OpenAI (diagnóstico pt-BR) → WhatsApp / Telegram
 ```
+
+## Interface Web
+
+Acesse `http://localhost:8000` para configurar via UI:
+
+- **Setup wizard** — configura canal, credenciais e Zabbix em 4 passos
+- **Flow editor** — visualiza e edita o pipeline de alertas
+- **Prompt editor** — personaliza o prompt de diagnóstico da IA
+- **Zabbix** — configura media type e action diretamente no Zabbix
 
 ## Setup rápido
 
@@ -29,15 +40,20 @@ cp .env.example .env
 # Editar .env com suas chaves
 ```
 
-Variáveis obrigatórias:
+Variáveis principais:
 
 | Variável | Descrição |
 |----------|-----------|
 | `AI_API_KEY` | Chave OpenAI ou OpenRouter |
 | `AI_BASE_URL` | `https://api.openai.com/v1` (OpenAI) ou `https://openrouter.ai/api/v1` |
 | `AI_MODEL` | `gpt-4o` (OpenAI) ou `openai/gpt-4o` (OpenRouter) |
-| `EVOLUTION_API_KEY` | Chave de autenticação do Evolution API |
-| `WHATSAPP_DESTINATION_NUMBER` | Número destino, ex: `5511999999999` |
+| `NOTIFICATION_CHANNEL` | `whatsapp` (padrão) ou `telegram` |
+| `EVOLUTION_API_KEY` | Chave Evolution API (canal WhatsApp) |
+| `WHATSAPP_DESTINATION_NUMBER` | Número destino, ex: `5511999999999` (canal WhatsApp) |
+| `TELEGRAM_BOT_TOKEN` | Token do bot (canal Telegram) |
+| `TELEGRAM_CHAT_ID` | Chat ID do destino (canal Telegram) |
+
+> Todas as variáveis também podem ser configuradas via **interface web** sem editar arquivos.
 
 ### 2. Subir a stack
 
@@ -102,6 +118,16 @@ curl -X POST http://localhost:8000/webhook/zabbix \
     "itemValue": "94.3"
   }'
 ```
+
+## Usar Telegram em vez de WhatsApp
+
+```ini
+NOTIFICATION_CHANNEL=telegram
+TELEGRAM_BOT_TOKEN=1234567890:AAF...
+TELEGRAM_CHAT_ID=-100123456789
+```
+
+Ou configure via Setup wizard na interface web.
 
 ## Trocar para OpenRouter
 
