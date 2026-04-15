@@ -291,26 +291,34 @@ input[type="tel"],
 input[type="number"],
 textarea,
 select {
-  height: 38px;
-  padding: 0 12px;
-  border: 1.5px solid rgba(38, 37, 30, 0.18);
-  border-radius: var(--radius-sm);
+  height: 40px;
+  padding: 0 13px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius);
   font-size: 13.5px;
   font-family: var(--font);
   color: var(--text);
-  background: rgba(255, 255, 255, 0.55);
-  transition: border-color var(--transition), background var(--transition), box-shadow var(--transition);
+  background: var(--surface);
+  box-shadow: inset 0 1px 2px rgba(0,0,0,.04), var(--shadow-xs);
+  transition: border-color var(--transition), box-shadow var(--transition);
   width: 100%;
   outline: none;
   letter-spacing: -.01em;
-  box-sizing: border-box;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.5'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 36px;
 }
 
 input:focus,
 select:focus {
-  border-color: rgba(38, 37, 30, 0.45);
-  background: rgba(255, 255, 255, 0.8);
-  box-shadow: 0 0 0 3px rgba(38, 37, 30, 0.05);
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px rgba(37,99,235,.12), inset 0 1px 2px rgba(0,0,0,.03);
 }
 
 /* ── Normaliza autofill do Chrome/Safari ─────────────────────── */
@@ -323,19 +331,27 @@ input:-webkit-autofill:active {
   -webkit-background-clip: text;
   -webkit-text-fill-color: var(--text);
   transition: background-color 600000s 0s, color 600000s 0s;
-  box-shadow: inset 0 0 0 1000px rgba(255, 255, 255, 0.55);
+  box-shadow: inset 0 0 0 1000px var(--surface);
   caret-color: var(--text);
-  border: 1.5px solid rgba(38, 37, 30, 0.18) !important;
-  border-radius: var(--radius-sm) !important;
+  border: 1.5px solid var(--border-strong) !important;
+  border-radius: var(--radius) !important;
 }
 
 input:-webkit-autofill:focus {
-  border-color: rgba(38, 37, 30, 0.45) !important;
-  box-shadow: inset 0 0 0 1000px rgba(255, 255, 255, 0.8),
-              0 0 0 3px rgba(38, 37, 30, 0.05);
+  border-color: var(--border-focus) !important;
+  box-shadow: inset 0 0 0 1000px var(--surface),
+              0 0 0 3px rgba(37,99,235,.12);
+
+input:hover:not(:focus),
+select:hover:not(:focus) {
+  border-color: var(--border-strong);
+  box-shadow: inset 0 1px 2px rgba(0,0,0,.04), 0 0 0 1px rgba(0,0,0,.04);
 }
 
-input.error, select.error { border-color: var(--error); }
+input.error, select.error {
+  border-color: var(--error);
+  box-shadow: 0 0 0 3px rgba(220,38,38,.1), inset 0 1px 2px rgba(0,0,0,.04);
+}
 
 .field-error { font-size: 12px; color: var(--error); }
 
@@ -784,29 +800,39 @@ details[open] summary::before { transform: rotate(90deg); }
 details[open] summary { margin-bottom: 14px; }
 
 /* ── Wizard progress bar ─────────────────────────────────────── */
+/*
+  Layout: grid de 4 colunas iguais, cada step-item ocupa 1 coluna.
+  O conector fica absoluto, posicionado de left:-50% a right:50%
+  dentro do próprio step-item — assim spans de dot-center do item
+  anterior até o dot-center do item atual, independente da largura
+  do label.
+*/
 .wizard-progress {
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  margin-bottom: 28px;
-  padding: 0 4px;
-  gap: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  margin-bottom: 32px;
+  padding: 0 8px;
 }
 
 .wizard-step-item {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  position: relative; /* âncora do conector absoluto */
 }
 
+/* Conector horizontal posicionado entre os centros dos dois steps */
 .wizard-connector {
-  width: 52px;
+  position: absolute;
+  left: -50%;   /* alcança o centro do step anterior */
+  right: 50%;   /* termina no centro deste step */
   height: 2px;
+  top: 13px;    /* (dot_height 28px / 2) − 1px = 13px */
   background: var(--border);
-  margin-top: 13px;
-  flex-shrink: 0;
-  transition: background .3s;
+  border-radius: 1px;
+  transition: background .35s ease;
+  /* Não afeta o flow da coluna (é absoluto) */
 }
 
 .wizard-connector.done { background: var(--text-muted); }
@@ -816,27 +842,31 @@ details[open] summary { margin-bottom: 14px; }
   height: 28px;
   border-radius: 50%;
   background: var(--surface);
-  border: 2px solid var(--border);
+  border: 2px solid var(--border-strong);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 11.5px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text-muted);
-  transition: border-color .2s, background .2s, color .2s;
+  transition: border-color .2s, background .2s, color .2s, box-shadow .2s;
   flex-shrink: 0;
+  position: relative; /* fica acima do conector */
+  z-index: 1;
 }
 
 .wizard-step-dot.active {
-  border-color: var(--text);
-  background: var(--surface-hover);
-  color: var(--text);
+  border-color: var(--primary);
+  background: var(--primary-light);
+  color: var(--primary);
+  box-shadow: 0 0 0 4px rgba(37,99,235,.12);
 }
 
 .wizard-step-dot.done {
   border-color: var(--success);
   background: var(--success);
   color: #fff;
+  box-shadow: none;
 }
 
 .wizard-step-label {
@@ -845,6 +875,7 @@ details[open] summary { margin-bottom: 14px; }
   white-space: nowrap;
   font-weight: 500;
   letter-spacing: -.01em;
+  text-align: center;
 }
 
 .wizard-step-label.active { color: var(--text); font-weight: 600; }
@@ -1362,15 +1393,8 @@ details[open] summary { margin-bottom: 14px; }
   .welcome-features { grid-template-columns: 1fr; }
 
   .wizard-progress {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    justify-content: flex-start;
     padding: 0 4px 8px;
-    scrollbar-width: none;
-    flex-wrap: nowrap;
   }
-  .wizard-progress::-webkit-scrollbar { display: none; }
-  .wizard-connector { width: 36px; min-width: 24px; }
 
   .node-inspector { width: 100%; margin-top: 12px; }
   .flow-canvas-inner { min-width: 700px; }
@@ -1514,12 +1538,6 @@ details[open] summary { margin-bottom: 14px; }
   /* ── Wizard progress → compact (hide labels) ── */
   .wizard-progress {
     margin-bottom: 20px;
-    overflow: hidden;
-  }
-
-  .wizard-connector {
-    width: 28px;
-    min-width: 16px;
   }
 
   .wizard-step-label         { display: none; }

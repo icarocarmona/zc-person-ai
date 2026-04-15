@@ -1,0 +1,50 @@
+# Node
+frontend/node_modules/
+frontend/.vite/
+frontend/dist/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# Git & IDE
+.git/
+.gitignore
+.gitattributes
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Docs & meta
+*.md
+CLAUDE.md
+LICENSE
+
+# Docker
+.dockerignore
+docker-compose*.yml
+
+# Test / CI
+.github/
+tests/
+*.test.*
+*.spec.*
+
+# Logs & local config
+*.log
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
