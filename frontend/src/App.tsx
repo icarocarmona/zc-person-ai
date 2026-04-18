@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Settings2, Activity, Zap, GitBranch, Server } from 'lucide-react'
 import { SetupPage } from './pages/Setup'
 import { StatusPage } from './pages/Status'
@@ -7,6 +7,8 @@ import { ZabbixPage } from './pages/Zabbix'
 
 type Page = 'status' | 'setup' | 'flow' | 'zabbix'
 
+const PAGES: Page[] = ['status', 'setup', 'flow', 'zabbix']
+
 const NAV = [
   { key: 'status' as Page,  icon: Activity,   label: 'Status' },
   { key: 'setup'  as Page,  icon: Settings2,  label: 'Configurar' },
@@ -14,8 +16,24 @@ const NAV = [
   { key: 'flow'   as Page,  icon: GitBranch,  label: 'Fluxo' },
 ]
 
+function readHash(): Page {
+  const h = window.location.hash.replace(/^#\/?/, '') as Page
+  return PAGES.includes(h) ? h : 'status'
+}
+
+function usePageFromHash(): [Page, (p: Page) => void] {
+  const [page, setPageState] = useState<Page>(readHash)
+  useEffect(() => {
+    const onHash = () => setPageState(readHash())
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
+  }, [])
+  const setPage = (p: Page) => { window.location.hash = `/${p}` }
+  return [page, setPage]
+}
+
 export default function App() {
-  const [page, setPage] = useState<Page>('status')
+  const [page, setPage] = usePageFromHash()
 
   return (
     <div className="layout">
@@ -60,10 +78,12 @@ export default function App() {
 
       {/* ── Main content ── */}
       <main className="main">
-        {page === 'status' && <StatusPage />}
-        {page === 'setup'  && <SetupPage onComplete={() => setPage('status')} />}
-        {page === 'zabbix' && <ZabbixPage />}
-        {page === 'flow'   && <FlowPage />}
+        <div className={page === 'setup' ? 'content-wide' : 'content-constrained'}>
+          {page === 'status' && <StatusPage />}
+          {page === 'setup'  && <SetupPage onComplete={() => setPage('status')} />}
+          {page === 'zabbix' && <ZabbixPage />}
+          {page === 'flow'   && <FlowPage />}
+        </div>
       </main>
 
       {/* ── Mobile bottom nav (hidden on desktop via CSS) ── */}

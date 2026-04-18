@@ -140,6 +140,41 @@ services:
       start_period: 20s
     restart: unless-stopped
 
+  # ---------------------------------------------------------------------------
+  # Grafana — dashboards e observabilidade
+  # ---------------------------------------------------------------------------
+  grafana:
+    image: grafana/grafana:11.4.0
+    container_name: zabbix-agent-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_SERVER_ROOT_URL: "http://localhost:3000"
+      GF_INSTALL_PLUGINS: ""
+      # Conecta no postgres-config como datasource padrão
+      GF_DATABASE_TYPE: "postgres"
+      GF_DATABASE_HOST: "postgres-config:5432"
+      GF_DATABASE_NAME: "agent_config"
+      GF_DATABASE_USER: "agent"
+      GF_DATABASE_PASSWORD: ${CONFIG_DB_PASSWORD:-agent_secret}
+      GF_DATABASE_SSL_MODE: "disable"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - zabbix-agent-net
+    depends_on:
+      postgres-config:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+
   # ===========================================================================
   # PROFILE: zabbix — sobe apenas com: docker compose --profile zabbix up -d
   # Usado para testes locais. NÃO sobe em produção.
@@ -253,6 +288,7 @@ volumes:
   evolution_instances:
   evolution_store:
   postgres_data:
+  grafana_data:
 
 networks:
   zabbix-agent-net:

@@ -192,6 +192,11 @@ html, body, #root {
   width: 100%;
 }
 
+.content-wide {
+  max-width: 1280px;
+  width: 100%;
+}
+
 /* ── Page header ─────────────────────────────────────────────── */
 .page-header { margin-bottom: 24px; }
 
@@ -340,7 +345,8 @@ input:-webkit-autofill:active {
 input:-webkit-autofill:focus {
   border-color: var(--border-focus) !important;
   box-shadow: inset 0 0 0 1000px var(--surface),
-              0 0 0 3px rgba(37,99,235,.12);
+              0 0 0 3px rgba(38, 37, 30, 0.05);
+}
 
 input:hover:not(:focus),
 select:hover:not(:focus) {
